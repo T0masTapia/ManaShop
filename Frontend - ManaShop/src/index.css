@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  /* --- CAMBIA ESTOS VALORES PARA PROBAR COLORES --- */
+  
+  --color-main-bg: #f5f5dc;       /* Fondo de la página */
+  --color-accent-primary: #d97706; /* Color de botones e iconos (Azul) */
+  --color-accent-hover: #b45309;   /* Color al pasar el mouse */
+  --color-text-main: #1e293b;
+  
+  /* ----------------------------------------------- */
+}
+
+@layer base {
+  body {
+    background-color: var(--color-main-bg) !important;
+    color: white;
+    margin: 0;
+    padding: 0;
+  }
+}

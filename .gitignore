@@ -1,0 +1,19 @@
+# Dependencias (Lo más pesado)
+**/node_modules/
+
+# Producción (La carpeta que se crea al compilar)
+**/build/
+**/dist/
+
+# Logs de errores
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Variables de entorno (¡Súper importante! Aquí irán tus claves de BD)
+**/.env
+**/.env.local
+
+# Archivos de VS Code y Sistema
+.vscode/
+.DS_Store
