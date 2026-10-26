@@ -1,7 +1,8 @@
 import type { Game } from '../types';
 import { useCart } from '../context/cartContext';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, Eye } from 'lucide-react'; // Usamos Lucide para mantener la estética
+import { ShoppingCart, Eye } from 'lucide-react';
+import { formatearPrecio } from '../utils/format';
 
 type Props = {
   game: Game;
@@ -54,7 +55,7 @@ const GameCard = ({ game }: Props) => {
           <div className="flex flex-col">
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Precio</span>
             <span className="text-xl font-black text-slate-900 tracking-tighter">
-              ${game.precio.toLocaleString('es-CL')}
+              ${formatearPrecio(game.precio)}
             </span>
           </div>
 

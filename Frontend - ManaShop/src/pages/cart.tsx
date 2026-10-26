@@ -1,6 +1,7 @@
 import { useCart } from '../context/cartContext';
 import { ShoppingBag, Trash2, Plus, Minus, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { formatearPrecio } from '../utils/format';
 
 const Cart = () => {
   const { carrito, addToCart, removeFromCart, checkout } = useCart();
@@ -62,7 +63,7 @@ const Cart = () => {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-black text-slate-900 text-lg md:text-xl truncate">{game.titulo}</h3>
                   <p className="text-blue-600 font-bold text-sm mb-2">
-                    ${game.precio.toLocaleString('es-CL')} c/u
+                    ${formatearPrecio(game.precio)} c/u
                   </p>
                   
                   {/* Controles de Cantidad */}
@@ -86,7 +87,7 @@ const Cart = () => {
                 {/* Subtotal y Eliminar */}
                 <div className="text-right flex flex-col items-end gap-2 pr-2">
                   <span className="text-lg font-black text-slate-900">
-                    ${(game.precio * game.quantity).toLocaleString('es-CL')}
+                    {formatearPrecio(game.precio * game.quantity)}
                   </span>
                   <button 
                     onClick={() => removeFromCart(game)}
@@ -107,7 +108,7 @@ const Cart = () => {
               <div className="space-y-4 mb-8">
                 <div className="flex justify-between text-slate-500">
                   <span>Productos ({carrito.length})</span>
-                  <span>${total.toLocaleString('es-CL')}</span>
+                  <span>{formatearPrecio(total)}</span>
                 </div>
                 <div className="flex justify-between text-slate-500">
                   <span>Envío Digital</span>
@@ -117,7 +118,7 @@ const Cart = () => {
                 <div className="flex justify-between items-end">
                   <span className="font-bold text-slate-900">Total</span>
                   <span className="text-3xl font-black text-blue-600 tracking-tighter">
-                    ${total.toLocaleString('es-CL')}
+                    {formatearPrecio(total)}
                   </span>
                 </div>
               </div>

@@ -8,12 +8,10 @@ function Layout() {
   const noSidebar = ['/login'];
   const shouldHideSidebar = noSidebar.includes(location.pathname);
 
-  // 🔥 SI NO HAY SIDEBAR → render normal
   if (shouldHideSidebar) {
     return <Rutas />;
   }
 
-  // 🔥 SI HAY SIDEBAR → envuelve contenido
   return (
     <Sidebar>
       <Rutas />

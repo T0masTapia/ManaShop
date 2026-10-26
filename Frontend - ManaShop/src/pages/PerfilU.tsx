@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useUser } from '../context/UserContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -13,8 +13,11 @@ import {
   Undo2, 
   X,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Camera,
+  Loader2
 } from 'lucide-react';
+import { formatearPrecio } from '../utils/format';
 
 const Perfil = () => {
   const { usuario, setUsuario } = useUser();
@@ -24,6 +27,9 @@ const Perfil = () => {
   const [nuevoPassword, setNuevoPassword] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [juegosComprados, setJuegosComprados] = useState<any[]>([]);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!usuario) {
@@ -49,8 +55,50 @@ const Perfil = () => {
   if (!usuario) return null;
 
   const cerrarSesion = () => {
+    localStorage.removeItem('token');
     setUsuario(null);
     navigate('/login');
+  };
+
+  const handleSeleccionarFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('La imagen no puede superar los 2MB.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    setSubiendoFoto(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.put('http://localhost:3001/perfil/avatar', formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const nuevaFotoUrl = res.data.avatarUrl;
+
+      // Actualizar el contexto del usuario con la nueva imagen
+      setUsuario({
+        ...usuario,
+        profile_picture: nuevaFotoUrl,
+        foto: nuevaFotoUrl
+      });
+    } catch (error: any) {
+      console.error('Error al subir avatar:', error);
+      alert(error.response?.data?.error || 'Error al subir la imagen');
+    } finally {
+      setSubiendoFoto(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   const cambiarPassword = async (e: React.FormEvent) => {
@@ -98,23 +146,53 @@ const Perfil = () => {
     }
   };
 
+  const avatarActual = (usuario as any).profile_picture || usuario.foto || 'https://i.pravatar.cc/150';
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-10 animate-in fade-in duration-500">
       
       {/* CABECERA DE PERFIL */}
       <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-xl border border-slate-100 mb-10 overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16"></div>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 pointer-events-none" />
         
         <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
+          
+          {/* AVATAR CON BOTÓN DE CARGA */}
           <div className="relative group">
-            <img
-              src={usuario.foto || 'https://i.pravatar.cc/100'}
-              alt="Perfil"
-              className="w-32 h-32 rounded-[2rem] object-cover ring-4 ring-blue-50 shadow-2xl transition-transform group-hover:scale-105"
-            />
-            <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-2 rounded-xl shadow-lg">
-              <User size={18} />
+            <div className="w-32 h-32 !rounded-[2rem] overflow-hidden ring-4 ring-blue-50 shadow-2xl relative bg-slate-100 flex items-center justify-center">
+              <img
+                src={avatarActual}
+                alt="Perfil"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                onError={(e) => { (e.target as HTMLImageElement).src = 'https://i.pravatar.cc/150'; }}
+              />
+
+              {subiendoFoto && (
+                <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center">
+                  <Loader2 className="animate-spin text-white" size={30} />
+                </div>
+              )}
             </div>
+
+            {/* Input oculto */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleSeleccionarFoto}
+              accept="image/png, image/jpeg, image/jpg, image/webp"
+              className="hidden"
+            />
+
+            {/* Botón flotante para abrir selector */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={subiendoFoto}
+              className="absolute -bottom-2 -right-2 bg-blue-600 hover:bg-blue-500 text-white p-2.5 !rounded-xl shadow-lg border-2 border-white transition-all hover:scale-110 active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Cambiar foto de perfil"
+            >
+              <Camera size={16} />
+            </button>
           </div>
 
           <div className="text-center md:text-left flex-1">
@@ -133,15 +211,17 @@ const Perfil = () => {
 
           <div className="flex gap-3">
             <button 
+              type="button"
               onClick={() => setMostrarModal(true)}
-              className="p-3 bg-slate-50 text-slate-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+              className="p-3 bg-slate-50 text-slate-600 !rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm cursor-pointer"
               title="Cambiar Contraseña"
             >
               <Key size={22} />
             </button>
             <button 
+              type="button"
               onClick={cerrarSesion}
-              className="p-3 bg-red-50 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm"
+              className="p-3 bg-red-50 text-red-600 !rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm cursor-pointer"
               title="Cerrar Sesión"
             >
               <LogOut size={22} />
@@ -168,19 +248,19 @@ const Perfil = () => {
                 key={juego.compra_id} 
                 className="group bg-white rounded-[2rem] overflow-hidden shadow-md hover:shadow-2xl transition-all duration-500 border border-slate-100 flex flex-col"
               >
-                <div className="relative h-48 overflow-hidden">
+                <div className="relative h-48 overflow-hidden bg-slate-900">
                   <img
                     src={juego.image || 'https://placehold.co/400x250'}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     alt={juego.name}
                   />
-                  {juego.reembolsado && (
+                  {juego.reembolsado ? (
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] flex items-center justify-center">
-                      <span className="bg-white/10 border border-white/20 text-white px-4 py-2 rounded-xl font-black uppercase tracking-widest text-xs">
+                      <span className="bg-white/10 border border-white/20 text-white px-4 py-2 !rounded-xl font-black uppercase tracking-widest text-xs">
                         Reembolsado
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="p-6 space-y-4 flex-1 flex flex-col">
@@ -195,16 +275,17 @@ const Perfil = () => {
                     </div>
                     <div className="flex items-center gap-2 text-slate-900 font-bold">
                       <CreditCard size={14} className="text-emerald-500" />
-                      <span>${Number(juego.precio_unitario).toLocaleString('es-CL')}</span>
+                      <span>${formatearPrecio(Number(juego.precio_unitario))}</span>
                     </div>
                   </div>
 
                   {!juego.reembolsado && (
                     <button
+                      type="button"
                       onClick={() => reembolsarJuego(juego.compra_id)}
-                      className="mt-auto w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-600 font-bold transition-all"
+                      className="mt-auto w-full flex items-center justify-center gap-2 py-3 !rounded-xl bg-slate-50 text-slate-500 hover:bg-red-50 hover:text-red-600 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
                     >
-                      <Undo2 size={18} /> Reembolsar
+                      <Undo2 size={16} /> Reembolsar
                     </button>
                   )}
                 </div>
@@ -217,9 +298,13 @@ const Perfil = () => {
       {/* MODAL DE CONTRASEÑA */}
       {mostrarModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setMostrarModal(false)}></div>
-          <div className="relative bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-300">
-            <button onClick={() => setMostrarModal(false)} className="absolute top-6 right-6 text-slate-300 hover:text-red-500 transition-colors">
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setMostrarModal(false)} />
+          <div className="relative bg-white !rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in duration-300">
+            <button 
+              type="button"
+              onClick={() => setMostrarModal(false)} 
+              className="absolute top-6 right-6 text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
+            >
               <X size={24} />
             </button>
 
@@ -242,7 +327,7 @@ const Perfil = () => {
                   <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                   <input
                     type="password"
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold"
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 !rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold"
                     value={nuevoPassword}
                     onChange={(e) => setNuevoPassword(e.target.value)}
                     required
@@ -252,13 +337,16 @@ const Perfil = () => {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button type="submit" className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-black hover:bg-blue-600 transition-all shadow-lg shadow-blue-900/10">
+                <button 
+                  type="submit" 
+                  className="flex-1 bg-slate-900 text-white py-4 !rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-blue-600 transition-all shadow-lg shadow-blue-900/10 cursor-pointer"
+                >
                   Actualizar
                 </button>
                 <button 
                   type="button" 
-                  onClick={() => setMostrarModal(false)}
-                  className="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                  onClick={() => setMostrarModal(false)} 
+                  className="flex-1 bg-slate-100 text-slate-600 py-4 !rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-slate-200 transition-all cursor-pointer"
                 >
                   Cancelar
                 </button>

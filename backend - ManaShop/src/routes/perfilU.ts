@@ -1,12 +1,69 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
 import { authMiddleware } from '../middleware/authMiddleware';
+import multer from 'multer';
+import path from 'path';
 
 const router = Router();
 
+// Configuración de Multer para almacenar avatares
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    // Sube dos niveles desde src/routes hacia la raíz donde está /uploads
+    cb(null, path.join(__dirname, '../../uploads'));
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `avatar-${uniqueSuffix}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // Límite de 2MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten imágenes (PNG, JPG, JPEG, WEBP)'));
+    }
+  }
+});
+
+// SUBIR O ACTUALIZAR FOTO DE PERFIL DEL USUARIO AUTENTICADO
+router.put('/avatar', authMiddleware, upload.single('avatar'), (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No se subió ninguna imagen' });
+  }
+
+  // URL pública que consumirá el frontend
+  const avatarUrl = `http://localhost:3001/uploads/${req.file.filename}`;
+
+  const query = `
+    UPDATE perfil_usuario 
+    SET profile_picture = ? 
+    WHERE usuario_id = ?
+  `;
+
+  db.query(query, [avatarUrl, userId], (err) => {
+    if (err) {
+      console.error('Error al actualizar avatar en la base de datos:', err);
+      return res.status(500).json({ error: 'Error al actualizar la foto de perfil' });
+    }
+
+    res.json({
+      mensaje: 'Foto de perfil actualizada con éxito',
+      avatarUrl
+    });
+  });
+});
+
 // Obtener todos los perfiles de usuario
 router.get('/', (req: Request, res: Response) => {
-    const query = `
+  const query = `
     SELECT 
       perfil_usuario.*, 
       usuario.email, 
@@ -15,40 +72,40 @@ router.get('/', (req: Request, res: Response) => {
     JOIN usuario ON perfil_usuario.usuario_id = usuario.id
   `;
 
-    db.query(query, (err, results) => {
-        if (err) {
-            console.error('Error al obtener los perfiles:', err);
-            return res.status(500).json({ error: 'Error interno del servidor' });
-        }
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error('Error al obtener los perfiles:', err);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
 
-        res.json(results);
-    });
+    res.json(results);
+  });
 });
 
 // Ruta para mostrar "Bienvenido, nombre"
 router.get('/bienvenido', authMiddleware, (req: Request, res: Response) => {
-    const userId = (req as any).userId;
+  const userId = (req as any).userId;
 
-    const query = `SELECT nombre FROM perfil_usuario WHERE usuario_id = ?`;
+  const query = `SELECT nombre, profile_picture FROM perfil_usuario WHERE usuario_id = ?`;
 
-    db.query(query, [userId], (err, results) => {
-        if (err) {
-            console.error('Error al obtener el nombre:', err);
-            return res.status(500).json({ error: 'Error interno del servidor' });
-        }
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      console.error('Error al obtener el nombre:', err);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
 
-        // Forzamos que results es un arreglo
-        const rows = results as any[];
+    const rows = results as any[];
 
-        if (rows.length === 0) {
-            return res.status(404).json({ error: 'Perfil no encontrado' });
-        }
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Perfil no encontrado' });
+    }
 
-        const nombre = rows[0].nombre;
-        res.json({ mensaje: `Bienvenido, ${nombre}` });
-    });
+    const { nombre, profile_picture } = rows[0];
+    res.json({ mensaje: `Bienvenido, ${nombre}`, profile_picture });
+  });
 });
 
+// Obtener el perfil del usuario autenticado
 router.get('/me', authMiddleware, (req: Request, res: Response) => {
   const userId = (req as any).userId;
 
@@ -78,12 +135,11 @@ router.get('/me', authMiddleware, (req: Request, res: Response) => {
   });
 });
 
-
-// Obtener un perfil por ID de usuario (debe ir después de /bienvenido)
+// Obtener un perfil por ID de usuario
 router.get('/:id', (req: Request, res: Response) => {
-    const { id } = req.params;
+  const { id } = req.params;
 
-    const query = `
+  const query = `
     SELECT 
       perfil_usuario.*, 
       usuario.email, 
@@ -93,20 +149,20 @@ router.get('/:id', (req: Request, res: Response) => {
     WHERE perfil_usuario.usuario_id = ?
   `;
 
-    db.query(query, [id], (err, results) => {
-        if (err) {
-            console.error('Error al obtener el perfil:', err);
-            return res.status(500).json({ error: 'Error interno del servidor' });
-        }
+  db.query(query, [id], (err, results) => {
+    if (err) {
+      console.error('Error al obtener el perfil:', err);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
 
-        const perfiles = results as any[];
+    const perfiles = results as any[];
 
-        if (perfiles.length === 0) {
-            return res.status(404).json({ error: 'Perfil no encontrado' });
-        }
+    if (perfiles.length === 0) {
+      return res.status(404).json({ error: 'Perfil no encontrado' });
+    }
 
-        res.json(perfiles[0]);
-    });
+    res.json(perfiles[0]);
+  });
 });
 
 // Obtener los juegos comprados por el usuario autenticado
@@ -140,6 +196,7 @@ router.get('/compras/juegos', authMiddleware, (req: Request, res: Response) => {
   });
 });
 
+// Registrar una compra
 router.post('/compras', authMiddleware, (req: Request, res: Response) => {
   const userId = (req as any).userId;
   const { juego_id, precio_unitario } = req.body;
@@ -148,7 +205,6 @@ router.post('/compras', authMiddleware, (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Faltan datos' });
   }
 
-  // Primero, revisar si hay stock disponible
   const checkStockQuery = 'SELECT stock FROM juegos WHERE id = ?';
   db.query(checkStockQuery, [juego_id], (err, results) => {
     if (err) {
@@ -165,7 +221,6 @@ router.post('/compras', authMiddleware, (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Juego sin stock disponible' });
     }
 
-    // Resta el stock
     const updateStockQuery = 'UPDATE juegos SET stock = stock - 1 WHERE id = ?';
 
     db.query(updateStockQuery, [juego_id], (err) => {
@@ -173,7 +228,6 @@ router.post('/compras', authMiddleware, (req: Request, res: Response) => {
         return res.status(500).json({ error: 'Error al actualizar stock' });
       }
 
-      // Inserta la compra
       const insertCompraQuery = `
         INSERT INTO compra (usuario_id, juego_id, fecha_compra, precio_unitario, reembolsado)
         VALUES (?, ?, NOW(), ?, 0)
@@ -195,7 +249,6 @@ router.put('/compras/reembolsar/:compra_id', authMiddleware, (req: Request, res:
   const userId = (req as any).userId;
   const { compra_id } = req.params;
 
-  // Primero, buscar la compra y verificar si pertenece al usuario y no ha sido reembolsada
   const selectCompraQuery = `
     SELECT juego_id, reembolsado 
     FROM compra 
@@ -220,7 +273,6 @@ router.put('/compras/reembolsar/:compra_id', authMiddleware, (req: Request, res:
       return res.status(400).json({ error: 'Esta compra ya ha sido reembolsada' });
     }
 
-    // Reembolsar: actualizar estado de la compra y devolver el stock
     const updateCompraQuery = `
       UPDATE compra SET reembolsado = 1 WHERE id = ?
     `;
@@ -243,6 +295,5 @@ router.put('/compras/reembolsar/:compra_id', authMiddleware, (req: Request, res:
     });
   });
 });
-
 
 export default router;

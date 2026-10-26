@@ -16,7 +16,8 @@ router.post('/login', (req: Request, res: Response) => {
       usuario.tipo_usuario,
       usuario.password,
       perfil_usuario.nombre,
-      perfil_usuario.apellido
+      perfil_usuario.apellido,
+      perfil_usuario.profile_picture
     FROM usuario
     JOIN perfil_usuario ON perfil_usuario.usuario_id = usuario.id
     WHERE usuario.email = ?
@@ -43,7 +44,8 @@ router.post('/login', (req: Request, res: Response) => {
 
     res.json({
       token,
-      usuario: userWithoutPassword // Incluye nombre aquí
+      usuario: userWithoutPassword, // Incluye nombre aquí
+      foto: user.profile_picture // Incluye la foto de perfil aquí
     });
   });
 });

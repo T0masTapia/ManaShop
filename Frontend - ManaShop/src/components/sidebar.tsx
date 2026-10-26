@@ -40,7 +40,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
           )}
         </div>
 
-        <nav className="flex-1 px-3 space-y-2 overflow-y-auto overflow-x-hidden scrollbar-hide">
+        <nav className="!no-underline flex-1 px-3 space-y-2 overflow-y-auto overflow-x-hidden scrollbar-hide">
           <NavItem to="/" icon={<Home size={22} />} label="Inicio" isOpen={isSidebarOpen} />
           <NavItem to="/carrito" icon={<ShoppingCart size={22} />} label="Carrito" isOpen={isSidebarOpen} badge={carrito.length > 0 ? carrito.length : undefined} />
           <NavItem to="/favoritos" icon={<Heart size={22} className="text-red-500 fill-red-500/20" />} label="Favoritos" isOpen={isSidebarOpen} />
@@ -83,7 +83,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
 const NavItem = ({ to, icon, label, isOpen, badge }: any) => {
   return (
     <NavLink to={to} end={to === "/"} className={({ isActive }) =>
-      `flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-200 group relative ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+      `!no-underline flex items-center gap-4 px-3 py-3 rounded-xl transition-all duration-200 group relative ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
       }`
     }>
       <div className="relative">
