@@ -3,6 +3,7 @@ import { db } from '../db';
 import { authMiddleware } from '../middleware/authMiddleware';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 
@@ -36,27 +37,54 @@ router.put('/avatar', authMiddleware, upload.single('avatar'), (req: Request, re
   const userId = (req as any).userId;
 
   if (!req.file) {
-    return res.status(400).json({ error: 'No se subió ninguna imagen' });
+    return res.status(400).json({ error: 'No se subió ningún archivo' });
   }
 
-  // URL pública que consumirá el frontend
-  const avatarUrl = `http://localhost:3001/uploads/${req.file.filename}`;
+  const nuevaUrl = `http://localhost:3001/uploads/${req.file.filename}`;
 
-  const query = `
-    UPDATE perfil_usuario 
-    SET profile_picture = ? 
-    WHERE usuario_id = ?
-  `;
+  // 1. Consultar la foto anterior que tiene registrada el usuario en la BD
+  const sqlBuscar = 'SELECT profile_picture FROM perfil_usuario WHERE usuario_id = ?';
 
-  db.query(query, [avatarUrl, userId], (err) => {
+  db.query(sqlBuscar, [userId], (err, results: any[]) => {
     if (err) {
-      console.error('Error al actualizar avatar en la base de datos:', err);
-      return res.status(500).json({ error: 'Error al actualizar la foto de perfil' });
+      return res.status(500).json({ error: 'Error al consultar el perfil: ' + err.message });
     }
 
-    res.json({
-      mensaje: 'Foto de perfil actualizada con éxito',
-      avatarUrl
+    // 2. Si tenía una foto previa guardada, procedemos a borrarla del disco
+    if (results.length > 0 && results[0].profile_picture) {
+      const fotoViejaUrl: string = results[0].profile_picture;
+
+      // Extraer únicamente el nombre del archivo (ejemplo: "avatar-1792796720480-287122774.jpg")
+      const nombreArchivoViejo = path.basename(fotoViejaUrl);
+
+      // Ruta física hacia la carpeta uploads desde la ubicación de este archivo
+      // (Si perfilU.ts está en src/routes, sube dos niveles hasta la raíz del backend: ../../uploads)
+      const rutaArchivoViejo = path.resolve(__dirname, '../../uploads', nombreArchivoViejo);
+
+      // Verificar que el archivo existe antes de intentar eliminarlo
+      if (fs.existsSync(rutaArchivoViejo)) {
+        fs.unlink(rutaArchivoViejo, (unlinkErr) => {
+          if (unlinkErr) {
+            console.error('No se pudo borrar el archivo anterior:', unlinkErr);
+          } else {
+            console.log(`Avatar anterior eliminado del disco: ${nombreArchivoViejo}`);
+          }
+        });
+      }
+    }
+
+    // 3. Actualizar la base de datos con la nueva URL
+    const sqlActualizar = 'UPDATE perfil_usuario SET profile_picture = ? WHERE usuario_id = ?';
+
+    db.query(sqlActualizar, [nuevaUrl, userId], (errUpdate) => {
+      if (errUpdate) {
+        return res.status(500).json({ error: 'Error al actualizar en la base de datos: ' + errUpdate.message });
+      }
+
+      res.json({
+        mensaje: 'Foto de perfil actualizada con éxito',
+        avatarUrl: nuevaUrl
+      });
     });
   });
 });

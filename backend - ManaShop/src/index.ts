@@ -1,4 +1,7 @@
 // src/index.ts
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -13,7 +16,7 @@ import TiposJuegos from './routes/tipoJuego';
 const app = express();
 
 const corsOptions = {
-  origin: 'http://localhost:5173',  // la URL de Vite
+  origin: 'http://localhost:5173', // la URL de Vite
   credentials: true,
 };
 

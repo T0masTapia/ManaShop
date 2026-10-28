@@ -1,10 +1,48 @@
 import { Router } from 'express';
 import { Request, Response } from 'express';
-import {db} from '../db';
+import axios from 'axios';
+import { db } from '../db';
 import { authMiddleware, ejecutivoMiddleware } from '../middleware/authMiddleware';
 import { ResultSetHeader } from 'mysql2';
 
 const router = Router();
+
+const RAWG_API_KEY = process.env.RAWG_API_KEY || '';
+
+// ==========================================
+// RUTA RAWG: Búsqueda externa de títulos
+// ==========================================
+router.get('/buscar-externo', authMiddleware, ejecutivoMiddleware, async (req: Request, res: Response) => {
+  const query = req.query.q as string;
+
+  if (!query || query.trim().length < 2) {
+    return res.status(400).json({ error: 'Debes ingresar al menos 2 caracteres.' });
+  }
+
+  try {
+    const rawgRes = await axios.get('https://api.rawg.io/api/games', {
+      params: {
+        key: RAWG_API_KEY,
+        search: query,
+        page_size: 6,
+      },
+    });
+
+    const resultados = rawgRes.data.results.map((j: any) => ({
+      rawg_id: j.id,
+      name: j.name,
+      image: j.background_image || '',
+      rating: j.rating,
+      genres: j.genres?.map((g: any) => g.name).join(', ') || 'General',
+      released: j.released || 'Sin fecha',
+    }));
+
+    res.json(resultados);
+  } catch (err: any) {
+    console.error('Error al consultar RAWG:', err.message);
+    res.status(500).json({ error: 'Error al consultar el catálogo externo de videojuegos' });
+  }
+});
 
 // Obtener todos los juegos
 router.get('/', (req: Request, res: Response) => {
@@ -46,18 +84,15 @@ router.post('/comprar', authMiddleware, (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Carrito vacío o inválido' });
   }
 
-  // Extraemos los IDs para consultar stock
   const ids = carrito.map(item => item.id);
   const placeholders = ids.map(() => '?').join(',');
 
-  // Consulta para obtener stock actual de esos juegos
   db.query(`SELECT id, stock FROM juegos WHERE id IN (${placeholders})`, ids, (err, results) => {
     if (err) {
       console.error('Error al consultar stock:', err);
       return res.status(500).json({ error: 'Error interno del servidor' });
     }
 
-    // Validar que cada juego tiene suficiente stock
     for (const item of carrito) {
       const juego = (results as any[]).find(j => j.id === item.id);
       if (!juego) {
@@ -68,8 +103,6 @@ router.post('/comprar', authMiddleware, (req: Request, res: Response) => {
       }
     }
 
-    // Rebajamos el stock para cada juego
-    // Ojo: idealmente usar transacción para evitar problemas
     carrito.forEach(item => {
       db.query('UPDATE juegos SET stock = stock - ? WHERE id = ?', [item.cantidad, item.id], (err) => {
         if (err) {
@@ -86,23 +119,25 @@ router.post('/comprar', authMiddleware, (req: Request, res: Response) => {
 router.post('/', authMiddleware, ejecutivoMiddleware, (req: Request, res: Response) => {
   const { name, price, image, tipo_id, stock, description } = req.body;
 
-  // Validación de campos obligatorios
   if (!name || price == null || !image || !tipo_id || stock == null || !description) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
 
-  // Validación de tipo de datos y valores positivos
-  if (typeof price !== 'number' || price <= 0) {
+  const numPrice = Number(price);
+  const numStock = Number(stock);
+  const numTipoId = Number(tipo_id);
+
+  if (isNaN(numPrice) || numPrice <= 0) {
     return res.status(400).json({ error: 'El precio debe ser un número positivo' });
   }
 
-  if (!Number.isInteger(stock) || stock < 0) {
+  if (!Number.isInteger(numStock) || numStock < 0) {
     return res.status(400).json({ error: 'El stock debe ser un número entero mayor o igual a 0' });
   }
 
   const query = `INSERT INTO juegos (name, price, image, tipo_id, stock, description) 
                  VALUES (?, ?, ?, ?, ?, ?)`;
-  const values = [name, price, image, tipo_id, stock, description];
+  const values = [name, numPrice, image, numTipoId, numStock, description];
 
   db.query(query, values, (err, result) => {
     if (err) {
@@ -120,21 +155,24 @@ router.put('/:id', authMiddleware, ejecutivoMiddleware, (req: Request, res: Resp
   const { id } = req.params;
   const { name, price, image, tipo_id, stock, description } = req.body;
 
-  // Validaciones
   if (!name || price == null || !image || !tipo_id || stock == null || !description) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
 
-  if (typeof price !== 'number' || price <= 0) {
+  const numPrice = Number(price);
+  const numStock = Number(stock);
+  const numTipoId = Number(tipo_id);
+
+  if (isNaN(numPrice) || numPrice <= 0) {
     return res.status(400).json({ error: 'El precio debe ser un número positivo' });
   }
 
-  if (!Number.isInteger(stock) || stock < 0) {
+  if (!Number.isInteger(numStock) || numStock < 0) {
     return res.status(400).json({ error: 'El stock debe ser un número entero mayor o igual a 0' });
   }
 
   const query = `UPDATE juegos SET name = ?, price = ?, image = ?, tipo_id = ?, stock = ?, description = ? WHERE id = ?`;
-  const values = [name, price, image, tipo_id, stock, description, id];
+  const values = [name, numPrice, image, numTipoId, numStock, description, id];
 
   db.query(query, values, (err, result) => {
     if (err) {
@@ -151,18 +189,17 @@ router.put('/:id', authMiddleware, ejecutivoMiddleware, (req: Request, res: Resp
   });
 });
 
-// --- RUTA ESPECÍFICA PARA MODIFICAR STOCK (REQUERIMIENTO EJECUTIVO) ---
+// Modificar stock
 router.patch('/:id/stock', authMiddleware, ejecutivoMiddleware, (req: Request, res: Response) => {
   const { id } = req.params;
   const { nuevoStock } = req.body;
 
-  // Validación: Que no venga vacío, que sea número y no sea negativo
   if (nuevoStock == null || !Number.isInteger(nuevoStock) || nuevoStock < 0) {
     return res.status(400).json({ error: 'El stock debe ser un número entero mayor o igual a 0' });
   }
 
   const query = 'UPDATE juegos SET stock = ? WHERE id = ?';
-  
+
   db.query(query, [nuevoStock, id], (err, result) => {
     if (err) {
       console.error('Error al actualizar stock:', err);
@@ -182,6 +219,7 @@ router.patch('/:id/stock', authMiddleware, ejecutivoMiddleware, (req: Request, r
   });
 });
 
+// Eliminar juego
 router.delete('/:id', authMiddleware, ejecutivoMiddleware, (req: Request, res: Response) => {
   const { id } = req.params;
 
