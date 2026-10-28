@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-// import '../styles/registro.css'; // si quieres estilos específicos
+
 
 const Registro = () => {
   return (
